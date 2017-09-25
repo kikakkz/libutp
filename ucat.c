@@ -575,7 +575,7 @@ int main(int argc, char *argv[])
 		if (c == -1) break;
 		switch(c) {
 			case 'h': usage(argv[0]);				break;
-			case 'd': o_debug++;					break;
+			case 'd': o_debug = 3;  				break;
 			case 'l': o_listen++;					break;
 			case 'p': o_local_port = optarg;		break;
 			case 'B': o_buf_size = atoi(optarg);	break;

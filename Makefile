@@ -9,10 +9,10 @@ CXXFLAGS += -Wno-sign-compare
 CXXFLAGS += -fpermissive
 
 # Uncomment to enable utp_get_stats(), and a few extra sanity checks
-#CFLAGS += -D_DEBUG
+CFLAGS += -D_DEBUG
 
 # Uncomment to enable debug logging
-#CFLAGS += -DUTP_DEBUG_LOGGING
+CFLAGS += -DUTP_DEBUG_LOGGING
 
 # Dynamically determine if librt is available.  If so, assume we need to link
 # against it for clock_gettime(2).  This is required for clean builds on OSX;

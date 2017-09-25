@@ -536,6 +536,13 @@ struct UTPSocket {
 	// just used for logging
 	int32 clock_drift_raw;
 
+    	uint64 next_ack_time;
+    	uint32 total_rcvd_packets;
+    	uint32 slow_start_packets;
+    	uint32 ack_packets;
+    	uint32 force_ack_packets;
+    	uint32 ack_interval;
+
 	SizableCircularBuffer inbuf, outbuf;
 
 	#ifdef _DEBUG
@@ -1771,6 +1778,11 @@ size_t utp_process_incoming(UTPSocket *conn, const byte *packet, size_t len, boo
 
 	conn->ctx->current_ms = utp_call_get_milliseconds(conn->ctx, conn);
 
+    	if (0 < conn->ack_packets) {
+        	conn->ack_packets--;
+    	}
+    	conn->total_rcvd_packets++;
+
 	const PacketFormatV1 *pf1 = (PacketFormatV1*)packet;
 	const byte *packet_end = packet + len;
 
@@ -2619,6 +2631,14 @@ utp_socket*	utp_create_socket(utp_context *ctx)
 	conn->ssthresh				= conn->opt_sndbuf;
 	conn->clock_drift			= 0;
 	conn->clock_drift_raw		= 0;
+
+    conn->next_ack_time         = 0;;
+    conn->total_rcvd_packets    = 0;
+    conn->slow_start_packets    = 200;
+    conn->ack_packets           = 6;
+    conn->force_ack_packets     = 6;
+    conn->ack_interval          = 47;
+
 	conn->outbuf.mask			= 15;
 	conn->inbuf.mask			= 15;
 	conn->outbuf.elements		= (void**)calloc(16, sizeof(void*));
@@ -3257,11 +3277,36 @@ void utp_issue_deferred_acks(utp_context *ctx)
 	assert(ctx);
 	if (!ctx) return;
 
+    bool ackable = false;
+	Array<UTPSocket*> ack_sockets;
+
 	for (size_t i = 0; i < ctx->ack_sockets.GetCount(); i++) {
 		UTPSocket *conn = ctx->ack_sockets[i];
-		conn->send_ack();
+        if (conn->total_rcvd_packets <= conn->slow_start_packets) {
+            ackable = true;
+        } else if (0 == conn->ack_packets) {
+            ackable = true;
+        } else if (conn->next_ack_time <= conn->ctx->current_ms &&
+                conn->force_ack_packets != conn->ack_packets) {
+            ackable = true;
+        }
+
+        if (ackable) {
+            conn->send_ack();
+            conn->ack_packets = conn->force_ack_packets;
+            conn->next_ack_time = conn->ctx->current_ms + conn->ack_interval;
+        } else {
+            removeSocketFromAckList(conn);
+            ack_sockets.Append(conn);
+        }
+
 		i--;
 	}
+
+    for (int i = 0; i < ack_sockets.GetCount(); i++) {
+        UTPSocket *conn = ack_sockets[i];
+        conn->schedule_ack();
+    }
 }
 
 // Should be called every 500ms
